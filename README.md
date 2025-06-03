@@ -41,3 +41,11 @@ Hello from Vagrant + Ansible + Node.js!
 [Abdullrahman Wasfi](https://www.linkedin.com/in/abdullrahmanwasfi)
 
 Made with ❤️ using Vagrant, Ansible, and Node.js
+
+---
+
+## 📄 License
+
+MIT License
+
+Let me know if you'd like it saved as a downloadable `.md` file or want me to help generate a GitHub repo structure for publishing.
