@@ -1,0 +1,96 @@
+---
+- name: Provision Node.js App with NGINX Reverse Proxy
+  hosts: all
+  become: true
+
+  vars:
+    node_app_dir: /opt/nodeapp
+
+  tasks:
+    - name: Install required packages
+      apt:
+        name: [curl, gnupg, nginx]
+        state: present
+        update_cache: true
+
+    - name: Add Node.js 18.x repo
+      shell: curl -fsSL https://deb.nodesource.com/setup_18.x | bash -
+      args:
+        executable: /bin/bash
+
+    - name: Install Node.js
+      apt:
+        name: nodejs
+        state: present
+
+    - name: Create application directory
+      file:
+        path: "{{ node_app_dir }}"
+        state: directory
+        mode: '0755'
+
+    - name: Create simple Node.js app
+      copy:
+        dest: "{{ node_app_dir }}/app.js"
+        content: |
+          const http = require('http');
+          const port = 3000;
+          const server = http.createServer((req, res) => {
+            res.statusCode = 200;
+            res.setHeader('Content-Type', 'text/plain');
+            res.end('Hello from Vagrant + Ansible + Node.js!\n');
+          });
+          server.listen(port, () => {
+            console.log(`Server running at http://localhost:${port}/`);
+          });
+
+    - name: Install PM2 process manager
+      npm:
+        name: pm2
+        global: yes
+
+    - name: Start Node app with PM2
+      command: pm2 start app.js
+      args:
+        chdir: "{{ node_app_dir }}"
+
+    - name: Save PM2 startup script
+      command: pm2 startup systemd -u vagrant --hp /home/vagrant
+
+    - name: Save current PM2 process list
+      command: pm2 save
+
+    - name: Create NGINX reverse proxy config
+      copy:
+        dest: /etc/nginx/sites-available/nodeapp
+        content: |
+          server {
+              listen 80;
+              server_name localhost;
+
+              location / {
+                  proxy_pass http://localhost:3000;
+                  proxy_http_version 1.1;
+                  proxy_set_header Upgrade $http_upgrade;
+                  proxy_set_header Connection 'upgrade';
+                  proxy_set_header Host $host;
+                  proxy_cache_bypass $http_upgrade;
+              }
+          }
+
+    - name: Enable NGINX site
+      file:
+        src: /etc/nginx/sites-available/nodeapp
+        dest: /etc/nginx/sites-enabled/nodeapp
+        state: link
+        force: yes
+
+    - name: Remove default NGINX config
+      file:
+        path: /etc/nginx/sites-enabled/default
+        state: absent
+
+    - name: Restart NGINX
+      service:
+        name: nginx
+        state: restarted
